@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Net;
 using System.Threading;
+using System.Threading.Tasks;
 
 namespace SimpleWebServer.Web
 {
@@ -8,15 +9,15 @@ namespace SimpleWebServer.Web
     {
         static void Main(string[] args)
         {
+            ThreadPool.SetMinThreads(0, 0);
+            ThreadPool.SetMaxThreads(8, 8);
             var listener = new HttpListener();
             listener.Prefixes.Add("http://127.0.0.1:5000/");
             listener.Start();
             //SyncListener(listener);
-            //SyncListenerWithThread(listener);
-            AsyncListener(listener);
+            SyncListenerWithThread(listener);
+            //AsyncListener1(listener);
         }
-
-        private static readonly Random Random = new Random();
 
         /// <summary>
         /// 单线程
@@ -28,7 +29,7 @@ namespace SimpleWebServer.Web
             {
                 //接收请求
                 var context = listener.GetContext();
-                Thread.Sleep(Random.Next(1000, 2000));
+                Thread.Sleep(1000);
                 SetResponse(context);
                 Thread.Sleep(0);
             }
@@ -44,13 +45,25 @@ namespace SimpleWebServer.Web
             {
                 //接收请求
                 var context = listener.GetContext();
-                var thread = new Thread(() =>
+                Task.Run(() =>
                 {
-                    Thread.Sleep(Random.Next(1000, 2000));
+                    Thread.Sleep(1000);
                     SetResponse(context);
                 });
-                thread.Start();
                 Thread.Sleep(0);
+            }
+        }
+
+        /// <summary>
+        /// 异步模拟
+        /// </summary>
+        /// <param name="listener"></param>
+        static void AsyncListener1(HttpListener listener)
+        {
+            while (true)
+            {
+                var context = listener.GetContext();
+                Task.Delay(1000).ContinueWith(task => SetResponse(context));
             }
         }
 
@@ -62,15 +75,28 @@ namespace SimpleWebServer.Web
         {
             while (true)
             {
-                //等待传入请求时，此方法会阻塞线程
                 var context = listener.GetContext();
-                CallbackThread.Instance.Register(() =>
+                //cpu密集操作消耗
+                Thread.Sleep(1);
+                //io操作
+                Task.Delay(1000).ContinueWith((task =>
                 {
-                    SetResponse(context);
-                });
+                    //cpu密集操作消耗
+                    Thread.Sleep(1);
+                    //io操作
+                    Task.Delay(100).ContinueWith(_ =>
+                    {
+                        //cpu密集操作
+                        Thread.Sleep(1);
+                        //响应
+                        SetResponse(context);
+                    });
+                }));
                 Thread.Sleep(0);
             }
         }
+
+
 
         private static void SetResponse(HttpListenerContext context)
         {
