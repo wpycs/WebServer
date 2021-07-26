@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Net;
 using System.Text;
 using System.Threading;
@@ -139,8 +140,13 @@ namespace WebServer.Test
             while (true)
             {
                 var context = _listener.GetContext();
+                Debug.WriteLine(Thread.CurrentThread.ManagedThreadId);
                 //简化版
-                Task.Delay(1000).ContinueWith(r => EndResponse(context));
+                Task.Delay(1000).ContinueWith(r =>
+                {
+                    Debug.WriteLine(Thread.CurrentThread.ManagedThreadId);
+                    EndResponse(context);
+                });
                 Thread.Sleep(0);
             }
         }
@@ -243,6 +249,41 @@ namespace WebServer.Test
                     EndResponse(context);
                 }
             }
+        }
+
+        [Fact(DisplayName ="await Task是否会发生线程切换")]
+        public  async Task Test15()
+        {
+            async Task InnerTest()
+            {
+                Debug.WriteLine(Thread.CurrentThread.ManagedThreadId);
+                await Task.CompletedTask;
+                Debug.WriteLine(Thread.CurrentThread.ManagedThreadId);
+                var res = await Task.FromResult(10);
+                Debug.WriteLine(Thread.CurrentThread.ManagedThreadId);
+                await Task.Delay(0);
+                Debug.WriteLine(Thread.CurrentThread.ManagedThreadId);
+                await Task.Delay(1);
+                Debug.WriteLine(Thread.CurrentThread.ManagedThreadId);
+                await Task.Yield();
+                Debug.WriteLine(Thread.CurrentThread.ManagedThreadId);
+            }
+            Debug.WriteLine(Thread.CurrentThread.ManagedThreadId);
+            await InnerTest();
+            Debug.WriteLine(Thread.CurrentThread.ManagedThreadId);
+        }
+
+        [Fact(DisplayName = "await Task是否一定是异步IO")]
+        public async Task Test16()
+        {
+            async Task InnerTest()
+            {
+                Debug.WriteLine(Thread.CurrentThread.ManagedThreadId);
+                await Task.Run(() => 1);
+            }
+            Debug.WriteLine(Thread.CurrentThread.ManagedThreadId);
+            await InnerTest();
+            Debug.WriteLine(Thread.CurrentThread.ManagedThreadId);
         }
 
         private void EndResponse(HttpListenerContext context)
